@@ -79,10 +79,14 @@ public class Main {
                     int length = minutes * 60 + seconds;
                     String name = inner.getString("Name");
 
-                    innerList.add(new Chapter(mp3File, name, length));
+                    String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size()-1).getChapterName();
+                    //only add a new chapter if it isn't a continutation of the last one
+                    String regex = lastChapterName + " \\((.*)\\)";
+                    if (!name.matches(regex)) {
+                        innerList.add(new Chapter(mp3File, name, length));
+                        chapters.add(new Chapter(mp3File, name, length));
+                    }
                 }
-
-                chapters.addAll(innerList);
 
             } catch (IOException | UnsupportedTagException | InvalidDataException | JSONException e) {
                 logAndExit(e);
