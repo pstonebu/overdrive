@@ -3,6 +3,7 @@ package com.stoneburner;
 import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
+import com.sun.tools.internal.xjc.reader.xmlschema.bindinfo.BIConversion;
 import org.apache.commons.lang3.SystemUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -11,6 +12,7 @@ import org.json.JSONObject;
 import java.io.*;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static com.google.common.collect.Lists.newArrayList;
@@ -33,11 +35,10 @@ public class Main {
 
     public static void main(String[] args) {
 
-        List<File> mp3Files = getAllMp3FilesInDirectory();
         List<Chapter> chapters = newArrayList();
 
-        String albumtitle = "";
-        String author = "";
+        AtomicReference<String> albumtitle = new AtomicReference<>("");
+        AtomicReference<String> author = new AtomicReference<>("");
 
         boolean isWin = SystemUtils.IS_OS_WINDOWS;
         boolean isMac = SystemUtils.IS_OS_MAC;
@@ -46,12 +47,12 @@ public class Main {
             logAndExit(new Exception("Not running windows or osx."));
         }
 
-        for (File file : mp3Files) {
+        getAllMp3FilesInDirectory().stream().forEach(file -> {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
-                if (isBlank(albumtitle)) {
-                    albumtitle = mp3File.getId3v2Tag().getAlbum();
-                    author = mp3File.getId3v2Tag().getArtist();
+                if (isBlank(albumtitle.get())) {
+                    albumtitle.set(mp3File.getId3v2Tag().getAlbum());
+                    author.set(mp3File.getId3v2Tag().getArtist());
                 }
                 List<Chapter> innerList = newArrayList();
 
@@ -64,31 +65,23 @@ public class Main {
                 } catch (JSONException e) {
                     JSONObject chapter = markerObj.getJSONObject("Markers").getJSONObject("Marker");
                     String time = chapter.getString("Time");
-                    String[] timeParts = time.substring(0, time.indexOf(".")).split(":");
-                    int minutes = valueOf(timeParts[0]);
-                    int seconds = valueOf(timeParts[1]);
-                    int length = minutes * 60 + seconds;
                     String name = chapter.getString("Name");
 
-                    chapters.add(new Chapter(mp3File, name, length));
-                    continue;
+                    chapters.add(new Chapter(mp3File, name, time));
+                    return;
                 }
 
                 log(array.length() + " markers found in " + mp3File.getFilename());
                 for (int i = 0; i < array.length(); i++) {
                     JSONObject inner = (JSONObject)array.get(i);
                     String time = inner.getString("Time");
-                    String[] timeParts = time.substring(0, time.indexOf(".")).split(":");
-                    int minutes = valueOf(timeParts[0]);
-                    int seconds = valueOf(timeParts[1]);
-                    int length = minutes * 60 + seconds;
                     String name = inner.getString("Name");
 
                     String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size()-1).getChapterName();
                     //only add a new chapter if it isn't a continutation of the last one
                     String regex = lastChapterName + " \\((.*)\\)";
                     if (!name.matches(regex)) {
-                        Chapter newChapter = new Chapter(mp3File, name, length);
+                        Chapter newChapter = new Chapter(mp3File, name, time);
                         innerList.add(newChapter);
                         chapters.add(newChapter);
                     }
@@ -97,26 +90,30 @@ public class Main {
             } catch (IOException | UnsupportedTagException | InvalidDataException | JSONException e) {
                 logAndExit(e);
             }
-        }
+        });
 
         for (int i = 0; i < chapters.size(); i++) {
             Chapter chapter = chapters.get(i);
             String mp3splt = isMac ? "/usr/local/bin/mp3splt" : "mp3splt.exe";
             int beginminutes = chapter.getSecondsMark() / 60;
             int beginseconds = chapter.getSecondsMark() % 60;
+            int beginhundredths = chapter.getHundredths();
             int endminutes = 0;
             int endseconds = 0;
+            int endhundredths = 0;
 
             //if this is the last chapter or this is the last chapter of this file
             if (i+1 == chapters.size() || chapter.getMp3File() != chapters.get(i+1).getMp3File()) {
-                endminutes = (int)chapter.getMp3File().getLengthInSeconds() / 60;
-                endseconds = (int)chapter.getMp3File().getLengthInSeconds() % 60;
+                endminutes = -1;
             } else {
                 endminutes = chapters.get(i+1).getSecondsMark() / 60;
                 endseconds = chapters.get(i+1).getSecondsMark() % 60;
+                endhundredths = chapters.get(i+1).getHundredths();
             }
 
             String newFileName = "\"" + (i+1 + " - " + chapter.getChapterName())
+                    .replace("\"", "")
+                    .replace(".", "")
                     .replace(" ", "+")
                     .replace("'", "\\'")
                     .replace(":", "") + "\"";
@@ -127,8 +124,8 @@ public class Main {
                     newFileName,
                     "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterName() + ",@n=" + (i+1) + "]\"",
                     (chapter.getMp3File().getFilename()).replace(" ", "\\ "),
-                    beginminutes + "." + beginseconds,
-                    endminutes + "." + endseconds);
+                    beginminutes + "." + beginseconds + "." + beginhundredths,
+                    endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
 
             log("executing '" + command + "'");
 
