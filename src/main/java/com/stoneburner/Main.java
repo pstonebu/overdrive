@@ -3,22 +3,27 @@ package com.stoneburner;
 import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.XML;
 
 import java.io.*;
-import java.net.URLDecoder;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+
+import static com.google.common.collect.Lists.newArrayList;
+import static java.lang.Integer.valueOf;
+import static java.lang.System.getProperty;
+import static java.net.URLDecoder.decode;
+import static java.nio.file.Files.isRegularFile;
+import static java.nio.file.Files.walk;
+import static java.nio.file.Paths.get;
+import static org.apache.commons.io.FilenameUtils.getExtension;
+import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace;
+import static org.json.XML.toJSONObject;
 
 public class Main {
 
@@ -29,7 +34,7 @@ public class Main {
     public static void main(String[] args) {
 
         List<File> mp3Files = getAllMp3FilesInDirectory();
-        List<Chapter> chapters = new ArrayList<Chapter>();
+        List<Chapter> chapters = newArrayList();
 
         String albumtitle = "";
         String author = "";
@@ -44,15 +49,15 @@ public class Main {
         for (File file : mp3Files) {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
-                if (StringUtils.isBlank(albumtitle)) {
+                if (isBlank(albumtitle)) {
                     albumtitle = mp3File.getId3v2Tag().getAlbum();
                     author = mp3File.getId3v2Tag().getArtist();
                 }
-                List<Chapter> innerList = new ArrayList<Chapter>();
+                List<Chapter> innerList = newArrayList();
 
-                String markers = URLDecoder.decode(mp3File.getId3v2Tag().getOverDriveMarkers(), "UTF-8");
+                String markers = decode(mp3File.getId3v2Tag().getOverDriveMarkers(), "UTF-8");
                 log("markers = " + markers);
-                JSONObject markerObj = XML.toJSONObject(markers);
+                JSONObject markerObj = toJSONObject(markers);
                 JSONArray array = null;
                 try {
                     array = markerObj.getJSONObject("Markers").getJSONArray("Marker");
@@ -60,8 +65,8 @@ public class Main {
                     JSONObject chapter = markerObj.getJSONObject("Markers").getJSONObject("Marker");
                     String time = chapter.getString("Time");
                     String[] timeParts = time.substring(0, time.indexOf(".")).split(":");
-                    int minutes = Integer.valueOf(timeParts[0]);
-                    int seconds = Integer.valueOf(timeParts[1]);
+                    int minutes = valueOf(timeParts[0]);
+                    int seconds = valueOf(timeParts[1]);
                     int length = minutes * 60 + seconds;
                     String name = chapter.getString("Name");
 
@@ -74,8 +79,8 @@ public class Main {
                     JSONObject inner = (JSONObject)array.get(i);
                     String time = inner.getString("Time");
                     String[] timeParts = time.substring(0, time.indexOf(".")).split(":");
-                    int minutes = Integer.valueOf(timeParts[0]);
-                    int seconds = Integer.valueOf(timeParts[1]);
+                    int minutes = valueOf(timeParts[0]);
+                    int seconds = valueOf(timeParts[1]);
                     int length = minutes * 60 + seconds;
                     String name = inner.getString("Name");
 
@@ -83,8 +88,9 @@ public class Main {
                     //only add a new chapter if it isn't a continutation of the last one
                     String regex = lastChapterName + " \\((.*)\\)";
                     if (!name.matches(regex)) {
-                        innerList.add(new Chapter(mp3File, name, length));
-                        chapters.add(new Chapter(mp3File, name, length));
+                        Chapter newChapter = new Chapter(mp3File, name, length);
+                        innerList.add(newChapter);
+                        chapters.add(newChapter);
                     }
                 }
 
@@ -95,7 +101,7 @@ public class Main {
 
         for (int i = 0; i < chapters.size(); i++) {
             Chapter chapter = chapters.get(i);
-            String mp3splt = new StringBuilder().append(isMac ? "/usr/local/bin/mp3splt" : "mp3splt.exe").toString();
+            String mp3splt = isMac ? "/usr/local/bin/mp3splt" : "mp3splt.exe";
             int beginminutes = chapter.getSecondsMark() / 60;
             int beginseconds = chapter.getSecondsMark() % 60;
             int endminutes = 0;
@@ -110,7 +116,10 @@ public class Main {
                 endseconds = chapters.get(i+1).getSecondsMark() % 60;
             }
 
-            String newFileName = "\"" + (i+1 + " - " + chapter.getChapterName()).replace(" ", "+").replace("'", "\\'").replace(":", "") + "\"";
+            String newFileName = "\"" + (i+1 + " - " + chapter.getChapterName())
+                    .replace(" ", "+")
+                    .replace("'", "\\'")
+                    .replace(":", "") + "\"";
 
             String command = String.format(MP3_SPLT_COMMAND,
                     mp3splt,
@@ -163,12 +172,12 @@ public class Main {
     }
 
     private static List<File> getAllMp3FilesInDirectory() {
-        List<File> mp3Files = new ArrayList<File>();
+        List<File> mp3Files = newArrayList();
         String decodedPath = "";
         try {
-            decodedPath = URLDecoder.decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), "UTF-8");
-        } catch (UnsupportedEncodingException ex) {
-            logAndExit(ex);
+            decodedPath = decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            logAndExit(e);
         }
 
         File pathFile = new File(decodedPath);
@@ -178,9 +187,9 @@ public class Main {
 
         path = decodedPath;
 
-        try(Stream<Path> paths = Files.walk(Paths.get(decodedPath))) {
+        try (Stream<Path> paths = walk(get(decodedPath))) {
             paths.forEach(filePath -> {
-                if (Files.isRegularFile(filePath) && FilenameUtils.getExtension(filePath.toString()).equals("mp3")) {
+                if (isRegularFile(filePath) && getExtension(filePath.toString()).equals("mp3")) {
                     mp3Files.add(filePath.toFile());
                     log("found " + filePath.getFileName().toString());
                 }
@@ -194,9 +203,7 @@ public class Main {
 
     private static void logAndExit(Exception e) {
         log("Exception: " + e.getMessage());
-        for (StackTraceElement element : e.getStackTrace()) {
-            log(element.toString());
-        }
+        log(getStackTrace(e));
         System.exit(0);
     }
 
@@ -218,7 +225,7 @@ public class Main {
             fw = new FileWriter(file.getAbsoluteFile(), true);
             bw = new BufferedWriter(fw);
 
-            bw.write(message + System.getProperty("line.separator"));
+            bw.write(message + getProperty("line.separator"));
 
         } catch (IOException e) {
             logAndExit(e);
@@ -228,8 +235,8 @@ public class Main {
                     bw.close();
                 if (fw != null)
                     fw.close();
-            } catch (IOException ex) {
-                logAndExit(ex);
+            } catch (IOException e) {
+                logAndExit(e);
             }
         }
     }
