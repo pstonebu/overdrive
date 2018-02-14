@@ -123,7 +123,7 @@ public class Main {
             String command = format(MP3_SPLT_COMMAND,
                     mp3splt,
                     chapter.getMp3File().isVbr() ? "-f" : "",
-                    cleanFileName(chapter.getFile().getParentFile().getAbsolutePath()) + "/overdrivesplit",
+                    cleanFileName(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)"),
                     newFileName,
                     "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterName() + ",@n=" + (i+1) + "]\"",
                     cleanFileName(chapter.getMp3File().getFilename()),
@@ -169,7 +169,9 @@ public class Main {
         }
 
         getAllFilesInDirectoryWithExtension("jpg").stream().forEach(file -> {
-            File destination = new File(file.getParentFile().getAbsolutePath() + "/overdrivesplit/" + file.getName());
+            StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
+            builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
+            File destination = new File(builder.toString());
             try {
                 copyFile(file, destination);
             } catch (IOException e) {
