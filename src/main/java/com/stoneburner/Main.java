@@ -220,7 +220,8 @@ public class Main {
     private static String cleanFileName(String string) {
         return string.replace(" ", "\\ ")
                 .replace("(", "\\(")
-                .replace(")", "\\)");
+                .replace(")", "\\)")
+                .replace("'", "\\'");
     }
 
     private static void logAndExit(Exception e) {
