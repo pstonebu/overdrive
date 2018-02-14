@@ -173,7 +173,7 @@ public class Main {
             }
         });
 
-        getAllFilesInDirectoryWithExtension("jpg").stream().forEach(file -> {
+        getAllFilesInDirectoryWithExtension("jpg").parallelStream().forEach(file -> {
             StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
             builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
             File destination = new File(builder.toString());
