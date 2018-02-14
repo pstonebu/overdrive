@@ -2,16 +2,20 @@ package com.stoneburner;
 
 import com.mpatric.mp3agic.Mp3File;
 
+import java.io.File;
+
 import static java.lang.Integer.valueOf;
 
 public class Chapter {
     private Mp3File mp3File;
+    private File file;
     private String chapterName;
     private int secondsMark;
     private int hundredths;
 
-    public Chapter(Mp3File mp3File, String chapterName, String timeString) {
+    public Chapter(Mp3File mp3File, File file, String chapterName, String timeString) {
         this.mp3File = mp3File;
+        this.file = file;
         this.chapterName = chapterName;
         assignTimeFromString(timeString);
     }
@@ -34,8 +38,18 @@ public class Chapter {
         this.mp3File = mp3File;
     }
 
+    public File getFile() {
+        return file;
+    }
+
+    public void setFile(File file) {
+        this.file = file;
+    }
+
     public String getChapterName() {
-        return chapterName.replace(".", "").replace("\"", "");
+        return chapterName.replace(".", "")
+                .replace("\"", "")
+                .replace("(00:00)", "continued");
     }
 
     public void setChapterName(String chapterName) {

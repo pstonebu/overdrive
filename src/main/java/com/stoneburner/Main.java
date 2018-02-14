@@ -3,6 +3,7 @@ package com.stoneburner;
 import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -15,20 +16,23 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static java.lang.String.format;
 import static java.lang.System.getProperty;
 import static java.net.URLDecoder.decode;
 import static java.nio.file.Files.isRegularFile;
 import static java.nio.file.Files.walk;
 import static java.nio.file.Paths.get;
+import static org.apache.commons.io.FileUtils.copyFile;
 import static org.apache.commons.io.FilenameUtils.getExtension;
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.apache.commons.lang3.StringUtils.leftPad;
 import static org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace;
 import static org.json.XML.toJSONObject;
 
 public class Main {
 
     //mp3splt[.exe] -d overdrivesplit -o newfilename input start_time end_time
-    private static final String MP3_SPLT_COMMAND = "%s %s -d overdrivesplit -o %s -g %s %s %s %s";
+    private static final String MP3_SPLT_COMMAND = "%s %s -d %s -o %s -g %s %s %s %s";
     private static String path = "";
 
     public static void main(String[] args) {
@@ -45,7 +49,7 @@ public class Main {
             logAndExit(new Exception("Not running windows or osx."));
         }
 
-        getAllMp3FilesInDirectory().stream().forEach(file -> {
+        getAllFilesInDirectoryWithExtension("mp3").stream().forEach(file -> {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
                 if (isBlank(albumtitle.get())) {
@@ -65,7 +69,7 @@ public class Main {
                     String time = chapter.getString("Time");
                     String name = chapter.getString("Name");
 
-                    chapters.add(new Chapter(mp3File, name, time));
+                    chapters.add(new Chapter(mp3File, file, name, time));
                     return;
                 }
 
@@ -79,7 +83,7 @@ public class Main {
                     //only add a new chapter if it isn't a continutation of the last one
                     String regex = lastChapterName + " \\((.*)\\)";
                     if (!name.matches(regex)) {
-                        Chapter newChapter = new Chapter(mp3File, name, time);
+                        Chapter newChapter = new Chapter(mp3File, file, name, time);
                         innerList.add(newChapter);
                         chapters.add(newChapter);
                     }
@@ -109,19 +113,20 @@ public class Main {
                 endhundredths = chapters.get(i+1).getHundredths();
             }
 
-            String newFileName = "\"" + (i+1 + " - " + chapter.getChapterName())
+            String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + " - " + chapter.getChapterName())
                     .replace("\"", "")
                     .replace(".", "")
                     .replace(" ", "+")
                     .replace("'", "\\'")
                     .replace(":", "") + "\"";
 
-            String command = String.format(MP3_SPLT_COMMAND,
+            String command = format(MP3_SPLT_COMMAND,
                     mp3splt,
                     chapter.getMp3File().isVbr() ? "-f" : "",
+                    cleanFileName(chapter.getFile().getParentFile().getAbsolutePath()) + "/overdrivesplit",
                     newFileName,
                     "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterName() + ",@n=" + (i+1) + "]\"",
-                    (chapter.getMp3File().getFilename()).replace(" ", "\\ "),
+                    cleanFileName(chapter.getMp3File().getFilename()),
                     beginminutes + "." + beginseconds + "." + beginhundredths,
                     endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
 
@@ -163,10 +168,19 @@ public class Main {
             }
         }
 
+        getAllFilesInDirectoryWithExtension("jpg").stream().forEach(file -> {
+            File destination = new File(file.getParentFile().getAbsolutePath() + "/overdrivesplit/" + file.getName());
+            try {
+                copyFile(file, destination);
+            } catch (IOException e) {
+                log(e.getMessage());
+            }
+        });
+
         log("Done");
     }
 
-    private static List<File> getAllMp3FilesInDirectory() {
+    private static List<File> getAllFilesInDirectoryWithExtension(String extension) {
         List<File> mp3Files = newArrayList();
         String decodedPath = "";
         try {
@@ -184,7 +198,7 @@ public class Main {
 
         try (Stream<Path> paths = walk(get(decodedPath))) {
             paths.forEach(filePath -> {
-                if (isRegularFile(filePath) && getExtension(filePath.toString()).equals("mp3")) {
+                if (isRegularFile(filePath) && getExtension(filePath.toString()).equals(extension)) {
                     mp3Files.add(filePath.toFile());
                     log("found " + filePath.getFileName().toString());
                 }
@@ -194,6 +208,12 @@ public class Main {
         }
 
         return mp3Files;
+    }
+
+    private static String cleanFileName(String string) {
+        return string.replace(" ", "\\ ")
+                .replace("(", "\\(")
+                .replace(")", "\\)");
     }
 
     private static void logAndExit(Exception e) {
