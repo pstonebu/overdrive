@@ -72,6 +72,7 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
+                            <finalName>overdrive-splitter</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>
@@ -82,6 +83,7 @@
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
+                            <appendAssemblyId>false</appendAssemblyId>
                         </configuration>
                     </execution>
                 </executions>
