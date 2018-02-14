@@ -3,7 +3,6 @@ package com.stoneburner;
 import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -22,6 +21,7 @@ import static java.net.URLDecoder.decode;
 import static java.nio.file.Files.isRegularFile;
 import static java.nio.file.Files.walk;
 import static java.nio.file.Paths.get;
+import static java.util.stream.IntStream.range;
 import static org.apache.commons.io.FileUtils.copyFile;
 import static org.apache.commons.io.FilenameUtils.getExtension;
 import static org.apache.commons.lang3.StringUtils.isBlank;
@@ -61,9 +61,9 @@ public class Main {
                 String markers = decode(mp3File.getId3v2Tag().getOverDriveMarkers(), "UTF-8");
                 log("markers = " + markers);
                 JSONObject markerObj = toJSONObject(markers);
-                JSONArray array = null;
+                AtomicReference<JSONArray> array = new AtomicReference<>();
                 try {
-                    array = markerObj.getJSONObject("Markers").getJSONArray("Marker");
+                    array.set(markerObj.getJSONObject("Markers").getJSONArray("Marker"));
                 } catch (JSONException e) {
                     JSONObject chapter = markerObj.getJSONObject("Markers").getJSONObject("Marker");
                     String time = chapter.getString("Time");
@@ -73,28 +73,33 @@ public class Main {
                     return;
                 }
 
-                log(array.length() + " markers found in " + mp3File.getFilename());
-                for (int i = 0; i < array.length(); i++) {
-                    JSONObject inner = (JSONObject)array.get(i);
-                    String time = inner.getString("Time");
-                    String name = inner.getString("Name");
+                log(array.get().length() + " markers found in " + mp3File.getFilename());
+                range(0, array.get().length()).forEach(i -> {
+                    try {
+                        JSONObject inner = (JSONObject) array.get().get(i);
+                        String time = inner.getString("Time");
+                        String name = inner.getString("Name");
 
-                    String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size()-1).getChapterName();
-                    //only add a new chapter if it isn't a continutation of the last one
-                    String regex = lastChapterName + " \\((.*)\\)";
-                    if (!name.matches(regex)) {
-                        Chapter newChapter = new Chapter(mp3File, file, name, time);
-                        innerList.add(newChapter);
-                        chapters.add(newChapter);
+                        String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
+
+                        //only add a new chapter if it isn't a continutation of the last one
+                        String regex = lastChapterName + " \\((.*)\\)";
+                        if (!name.matches(regex)) {
+                            Chapter newChapter = new Chapter(mp3File, file, name, time);
+                            innerList.add(newChapter);
+                            chapters.add(newChapter);
+                        }
+                    } catch (JSONException ex) {
+                        //do nothing
                     }
-                }
+                });
 
             } catch (IOException | UnsupportedTagException | InvalidDataException | JSONException e) {
                 logAndExit(e);
             }
         });
 
-        for (int i = 0; i < chapters.size(); i++) {
+        range(0, chapters.size()).forEach(i -> {
             Chapter chapter = chapters.get(i);
             String mp3splt = isMac ? "/usr/local/bin/mp3splt" : "mp3splt.exe";
             int beginminutes = chapter.getSecondsMark() / 60;
@@ -166,7 +171,7 @@ public class Main {
             } catch (Exception e) {
                 logAndExit(e);
             }
-        }
+        });
 
         getAllFilesInDirectoryWithExtension("jpg").stream().forEach(file -> {
             StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
