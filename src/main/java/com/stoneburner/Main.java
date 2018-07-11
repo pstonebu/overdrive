@@ -83,12 +83,11 @@ public class Main {
                         String time = inner.getString("Time");
                         String name = inner.getString("Name");
 
-                        Chapter lastChapter = chapters.get(chapters.size() - 1);
-                        String lastChapterName = chapters.isEmpty() ? "" : lastChapter.getChapterName();
+                        String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
                         //only add a new chapter if it isn't a continutation of the last one or it's a new file
                         String regex = lastChapterName + " \\((.*)\\)";
-                        if (!name.matches(regex) || !lastChapter.getFile().equals(file)) {
+                        if (!name.matches(regex) || !chapters.get(chapters.size() - 1).getFile().equals(file)) {
                             Chapter newChapter = new Chapter(mp3File, file, name, time);
                             innerList.add(newChapter);
                             chapters.add(newChapter);
