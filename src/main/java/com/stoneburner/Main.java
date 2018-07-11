@@ -10,7 +10,9 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -186,8 +188,8 @@ public class Main {
         log("Done");
     }
 
-    private static List<File> getAllFilesInDirectoryWithExtension(String extension) {
-        List<File> mp3Files = newArrayList();
+    private static Set<File> getAllFilesInDirectoryWithExtension(String extension) {
+        Set<File> mp3Files = new LinkedHashSet<>();
         String decodedPath = "";
         try {
             decodedPath = decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), "UTF-8");
