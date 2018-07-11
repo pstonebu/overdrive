@@ -122,7 +122,6 @@ public class Main {
                     .replace("\"", "")
                     .replace(".", "")
                     .replace(" ", "+")
-                    .replace("'", "\\'")
                     .replace(":", "") + "\"";
 
             String command = format(MP3_SPLT_COMMAND,
