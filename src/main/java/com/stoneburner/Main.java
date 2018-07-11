@@ -10,9 +10,10 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.nio.file.Path;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -82,11 +83,12 @@ public class Main {
                         String time = inner.getString("Time");
                         String name = inner.getString("Name");
 
-                        String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
+                        Chapter lastChapter = chapters.get(chapters.size() - 1);
+                        String lastChapterName = chapters.isEmpty() ? "" : lastChapter.getChapterName();
 
-                        //only add a new chapter if it isn't a continutation of the last one
+                        //only add a new chapter if it isn't a continutation of the last one or it's a new file
                         String regex = lastChapterName + " \\((.*)\\)";
-                        if (!name.matches(regex)) {
+                        if (!name.matches(regex) || !lastChapter.getFile().equals(file)) {
                             Chapter newChapter = new Chapter(mp3File, file, name, time);
                             innerList.add(newChapter);
                             chapters.add(newChapter);
@@ -189,7 +191,12 @@ public class Main {
     }
 
     private static Set<File> getAllFilesInDirectoryWithExtension(String extension) {
-        Set<File> mp3Files = new LinkedHashSet<>();
+        Set<File> files = new TreeSet<File>(new Comparator<File>() {
+            public int compare(File one, File other) {
+                return one.getName().compareToIgnoreCase(other.getName());
+            }
+        });
+
         String decodedPath = "";
         try {
             decodedPath = decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), "UTF-8");
@@ -207,7 +214,7 @@ public class Main {
         try (Stream<Path> paths = walk(get(decodedPath))) {
             paths.forEach(filePath -> {
                 if (isRegularFile(filePath) && getExtension(filePath.toString()).equals(extension)) {
-                    mp3Files.add(filePath.toFile());
+                    files.add(filePath.toFile());
                     log("found " + filePath.getFileName().toString());
                 }
             });
@@ -215,7 +222,7 @@ public class Main {
             logAndExit(e);
         }
 
-        return mp3Files;
+        return files;
     }
 
     private static String cleanFileName(String string) {
