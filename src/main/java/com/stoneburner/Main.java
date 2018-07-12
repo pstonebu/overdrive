@@ -128,11 +128,7 @@ public class Main {
                 endhundredths = chapters.get(i+1).getHundredths();
             }
 
-            String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + " - " + chapter.getChapterName())
-                    .replace("\"", "")
-                    .replace(".", "")
-                    .replace(" ", "+")
-                    .replace(":", "") + "\"";
+            String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + "+-+@t\"");
 
             String command = format(MP3_SPLT_COMMAND,
                     mp3splt,
