@@ -55,6 +55,10 @@ public class Main {
         getAllFilesInDirectoryWithExtension("mp3").stream().forEach(file -> {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
+                if (mp3File.getId3v2Tag().getOverDriveMarkers() == null) {
+                    log("no markers found in file: " + file.getName());
+                    return;
+                }
                 if (isBlank(albumtitle.get())) {
                     albumtitle.set(mp3File.getId3v2Tag().getAlbum());
                     author.set(mp3File.getId3v2Tag().getArtist());
