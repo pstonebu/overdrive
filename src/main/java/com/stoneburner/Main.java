@@ -92,6 +92,9 @@ public class Main {
                         //only add a new chapter if it isn't a continuation of the last one or it's a new file
                         String regex = lastChapterName.replaceAll(" continued$", "") + " \\((.*)\\)";
                         if (!name.matches(regex) || !chapters.get(chapters.size() - 1).getFile().equals(file)) {
+                            if (lastChapterName.equals(name)) {
+                                name = name + " continued";
+                            }
                             Chapter newChapter = new Chapter(mp3File, file, name, time);
                             innerList.add(newChapter);
                             chapters.add(newChapter);
