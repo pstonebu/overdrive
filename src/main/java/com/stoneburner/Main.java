@@ -85,6 +85,9 @@ public class Main {
                     try {
                         JSONObject inner = (JSONObject) array.get().get(i);
                         String time = inner.getString("Time");
+                        if (i==0 && !time.equals("0:00.000")) {
+                            time = "0:00.000";
+                        }
                         String name = inner.getString("Name");
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
