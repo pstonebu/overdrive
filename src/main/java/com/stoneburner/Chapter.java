@@ -49,7 +49,7 @@ public class Chapter {
     public String getChapterName() {
         return chapterName.replace(".", "")
                 .replace("\"", "")
-                .replace("(00:00)", "continued");
+                .replaceAll("\\([0-9]{2}:[0-9]{2}\\)$", "continued");
     }
 
     public void setChapterName(String chapterName) {
