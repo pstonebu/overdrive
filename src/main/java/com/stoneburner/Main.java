@@ -10,25 +10,22 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Stream;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.io.Files.move;
+import static java.lang.Math.abs;
 import static java.lang.String.format;
 import static java.lang.System.getProperty;
 import static java.net.URLDecoder.decode;
 import static java.nio.file.Files.isRegularFile;
-import static java.nio.file.Files.walk;
 import static java.nio.file.Paths.get;
 import static java.util.stream.IntStream.range;
 import static org.apache.commons.io.FileUtils.copyFile;
 import static org.apache.commons.io.FilenameUtils.getExtension;
-import static org.apache.commons.lang3.StringUtils.isBlank;
-import static org.apache.commons.lang3.StringUtils.leftPad;
+import static org.apache.commons.lang3.StringUtils.*;
 import static org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace;
 import static org.json.XML.toJSONObject;
 
@@ -52,9 +49,12 @@ public class Main {
             logAndExit(new Exception("Not running windows or osx."));
         }
 
-        getAllFilesInDirectoryWithExtension("mp3").stream().forEach(file -> {
+        AtomicLong totalLengthOriginal = new AtomicLong(0);
+
+        getAllFilesInDirectoryWithExtension("mp3", null).stream().forEach(file -> {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
+                totalLengthOriginal.addAndGet(mp3File.getLengthInMilliseconds());
                 if (mp3File.getId3v2Tag().getOverDriveMarkers() == null) {
                     log("no markers found in file: " + file.getName());
                     return;
@@ -112,6 +112,8 @@ public class Main {
             }
         });
 
+        AtomicReference<String> chapteredDirectory = new AtomicReference<String>("");
+
         range(0, chapters.size()).forEach(i -> {
             Chapter chapter = chapters.get(i);
             String mp3splt = isMac ? "/usr/local/bin/mp3splt" : "mp3splt.exe";
@@ -132,11 +134,12 @@ public class Main {
             }
 
             String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + "+-+@t\"");
+            chapteredDirectory.set(cleanFileName(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)"));
 
             String command = format(MP3_SPLT_COMMAND,
                     mp3splt,
                     chapter.getMp3File().isVbr() ? "-f" : "",
-                    cleanFileName(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)"),
+                    chapteredDirectory.get(),
                     newFileName,
                     "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterName() + ",@n=" + (i+1) + "]\"",
                     cleanFileName(chapter.getMp3File().getFilename()),
@@ -181,7 +184,7 @@ public class Main {
             }
         });
 
-        getAllFilesInDirectoryWithExtension("jpg").parallelStream().forEach(file -> {
+        getAllFilesInDirectoryWithExtension("jpg", null).parallelStream().forEach(file -> {
             StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
             builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
             File destination = new File(builder.toString());
@@ -192,10 +195,27 @@ public class Main {
             }
         });
 
+        long lengthOfNewFiles = getAllFilesInDirectoryWithExtension("mp3", chapteredDirectory.get()).stream()
+                .mapToLong(f -> {
+                    try {
+                        return new Mp3File(f).getLengthInMilliseconds();
+                    } catch (Exception e) {
+                        log("Error with mp3File: " + e);
+                        return 0;
+                    }
+                }).sum();
+
+        long differenceInTime = abs(lengthOfNewFiles - totalLengthOriginal.get());
+        if (differenceInTime > 10000) {
+            log("Total length difference was: " + differenceInTime + ". Something went wrong.");
+        } else {
+            swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
+        }
+
         log("Done");
     }
 
-    private static Set<File> getAllFilesInDirectoryWithExtension(String extension) {
+    private static Set<File> getAllFilesInDirectoryWithExtension(String extension, String optionalPath) {
         Set<File> files = new TreeSet<File>(new Comparator<File>() {
             public int compare(File one, File other) {
                 return one.getName().compareToIgnoreCase(other.getName());
@@ -209,25 +229,53 @@ public class Main {
             logAndExit(e);
         }
 
+        if (isNotEmpty(optionalPath)) {
+            decodedPath = optionalPath.replaceAll("\\\\", "");
+        }
+
         File pathFile = new File(decodedPath);
         if (pathFile.isFile()) {
             decodedPath = pathFile.getParentFile().getAbsolutePath();
         }
 
-        path = decodedPath;
-
-        try (Stream<Path> paths = walk(get(decodedPath))) {
-            paths.forEach(filePath -> {
-                if (isRegularFile(filePath) && getExtension(filePath.toString()).equals(extension)) {
-                    files.add(filePath.toFile());
-                    log("found " + filePath.getFileName().toString());
-                }
-            });
-        } catch (IOException e) {
-            logAndExit(e);
+        if (!isNotEmpty(optionalPath)) {
+            path = decodedPath;
         }
 
+        Arrays.stream(new File(decodedPath).listFiles()).forEach(file -> {
+            Path path = get(file.getAbsolutePath());
+            if (isRegularFile(path) && (isBlank(extension) || getExtension(file.getName()).equals(extension))) {
+                files.add(file);
+                log("found " + file.getName());
+            }
+        });
+
+
         return files;
+    }
+
+    private static void swapDirectories(String chapteredDirectory) {
+        new File(path + "/backup").mkdir();
+        getAllFilesInDirectoryWithExtension("", null).forEach(f -> {
+            try {
+                move(f, new File(path + "/backup/" + f.getName()));
+            } catch (IOException e) {
+                log("Error moving file! " + e);
+            }
+        });
+
+        getAllFilesInDirectoryWithExtension("", chapteredDirectory).forEach(f -> {
+            try {
+                move(f, new File(path + "/" + f.getName()));
+            } catch (IOException e) {
+                log("Error moving file! " + e);
+            }
+        });
+
+        File chapteredDirectoryFile = new File(chapteredDirectory);
+        if (chapteredDirectoryFile.exists() && chapteredDirectoryFile.isDirectory() && chapteredDirectoryFile.list().length == 0) {
+            chapteredDirectoryFile.delete();
+        }
     }
 
     private static String cleanFileName(String string) {
