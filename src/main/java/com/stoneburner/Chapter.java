@@ -1,15 +1,19 @@
 package com.stoneburner;
 
 import com.mpatric.mp3agic.Mp3File;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.File;
 
 import static java.lang.Integer.valueOf;
 
+@Getter @Setter
 public class Chapter {
     private Mp3File mp3File;
     private File file;
     private String chapterName;
+    private String chapterNameFormatted;
     private int secondsMark;
     private int hundredths;
 
@@ -17,6 +21,7 @@ public class Chapter {
         this.mp3File = mp3File;
         this.file = file;
         this.chapterName = chapterName;
+        this.chapterNameFormatted = chapterName;
         assignTimeFromString(timeString);
     }
 
@@ -28,47 +33,5 @@ public class Chapter {
         int length = (hours * 3600) + (minutes * 60) + seconds;
         this.secondsMark = length;
         this.hundredths = valueOf(timeParts[timeParts.length == 3 ? 2 : 3]) / 10;
-    }
-
-    public Mp3File getMp3File() {
-        return mp3File;
-    }
-
-    public void setMp3File(Mp3File mp3File) {
-        this.mp3File = mp3File;
-    }
-
-    public File getFile() {
-        return file;
-    }
-
-    public void setFile(File file) {
-        this.file = file;
-    }
-
-    public String getChapterName() {
-        return chapterName.replace(".", "")
-                .replace("\"", "")
-                .replaceAll("\\([0-9]{2}:[0-9]{2}\\)$", "continued");
-    }
-
-    public void setChapterName(String chapterName) {
-        this.chapterName = chapterName;
-    }
-
-    public int getSecondsMark() {
-        return secondsMark;
-    }
-
-    public void setSecondsMark(int secondsMark) {
-        this.secondsMark = secondsMark;
-    }
-
-    public int getHundredths() {
-        return hundredths;
-    }
-
-    public void setHundredths(int hundredths) {
-        this.hundredths = hundredths;
     }
 }
