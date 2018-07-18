@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.io.Files.move;
 import static java.lang.Math.abs;
 import static java.lang.String.format;
@@ -34,6 +35,7 @@ public class Main {
     //mp3splt[.exe] -d overdrivesplit -o newfilename input start_time end_time
     private static final String MP3_SPLT_COMMAND = "%s %s -d %s -o %s -g %s %s %s %s";
     private static String path = "";
+    private static Set<File> processedFiles = newHashSet();
 
     public static void main(String[] args) {
 
@@ -59,6 +61,9 @@ public class Main {
                     log("no markers found in file: " + file.getName());
                     return;
                 }
+
+                processedFiles.add(file);
+
                 if (isBlank(albumtitle.get())) {
                     albumtitle.set(mp3File.getId3v2Tag().getAlbum());
                     author.set(mp3File.getId3v2Tag().getArtist());
@@ -88,17 +93,19 @@ public class Main {
                         if (i==0 && !time.equals("0:00.000")) {
                             time = "0:00.000";
                         }
-                        String name = inner.getString("Name");
+                        String name = inner.getString("Name")
+                                .replace(".", "")
+                                .replace("\"", "")
+                                .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
+                                .replaceAll(" - continued$", "");
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
-                        //only add a new chapter if it isn't a continuation of the last one or it's a new file
-                        String regex = lastChapterName.replaceAll(" continued$", "") + " \\((.*)\\)";
-                        if (!name.matches(regex) || !chapters.get(chapters.size() - 1).getFile().equals(file)) {
-                            if (lastChapterName.equals(name)) {
-                                name = name + " continued";
-                            }
+                        if (!name.equals(lastChapterName) || !chapters.get(chapters.size() - 1).getFile().equals(file)) {
                             Chapter newChapter = new Chapter(mp3File, file, name, time);
+                            if (name.equals(lastChapterName)) {
+                                newChapter.setChapterNameFormatted(name + " continued");
+                            }
                             innerList.add(newChapter);
                             chapters.add(newChapter);
                         }
@@ -141,7 +148,7 @@ public class Main {
                     chapter.getMp3File().isVbr() ? "-f" : "",
                     chapteredDirectory.get(),
                     newFileName,
-                    "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterName() + ",@n=" + (i+1) + "]\"",
+                    "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterNameFormatted() + ",@n=" + (i+1) + "]\"",
                     cleanFileName(chapter.getMp3File().getFilename()),
                     beginminutes + "." + beginseconds + "." + beginhundredths,
                     endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
@@ -185,6 +192,7 @@ public class Main {
         });
 
         getAllFilesInDirectoryWithExtension("jpg", null).parallelStream().forEach(file -> {
+            processedFiles.add(file);
             StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
             builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
             File destination = new File(builder.toString());
@@ -207,6 +215,8 @@ public class Main {
 
         long differenceInTime = abs(lengthOfNewFiles - totalLengthOriginal.get());
         if (differenceInTime > 10000) {
+            log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
+            log("New files totaled: " + lengthOfNewFiles + " ms.");
             log("Total length difference was: " + differenceInTime + ". Something went wrong.");
         } else {
             swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
@@ -256,7 +266,7 @@ public class Main {
 
     private static void swapDirectories(String chapteredDirectory) {
         new File(path + "/backup").mkdir();
-        getAllFilesInDirectoryWithExtension("", null).forEach(f -> {
+        processedFiles.forEach(f -> {
             try {
                 move(f, new File(path + "/backup/" + f.getName()));
             } catch (IOException e) {
