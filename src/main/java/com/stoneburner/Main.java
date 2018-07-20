@@ -97,7 +97,7 @@ public class Main {
                                 .replace(".", "")
                                 .replace("\"", "")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
-                                .replaceAll(" - continued$", "");
+                                .replaceAll(" - [cC]ontinued$", "");
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
