@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.io.Files.move;
 import static java.lang.Math.abs;
 import static java.lang.String.format;
@@ -35,7 +34,8 @@ public class Main {
     //mp3splt[.exe] -d overdrivesplit -o newfilename input start_time end_time
     private static final String MP3_SPLT_COMMAND = "%s %s -d %s -o %s -g %s %s %s %s";
     private static String path = "";
-    private static Set<File> processedFiles = newHashSet();
+    private static Deque<File> processedFiles = new ArrayDeque<>();
+    private static File logFile = null;
 
     public static void main(String[] args) {
 
@@ -77,12 +77,7 @@ public class Main {
                 try {
                     array.set(markerObj.getJSONObject("Markers").getJSONArray("Marker"));
                 } catch (JSONException e) {
-                    JSONObject chapter = markerObj.getJSONObject("Markers").getJSONObject("Marker");
-                    String time = chapter.getString("Time");
-                    String name = chapter.getString("Name");
-
-                    chapters.add(new Chapter(mp3File, file, name, time));
-                    return;
+                    array.set(new JSONArray("[" + markerObj.getJSONObject("Markers").getJSONObject("Marker").toString() + "]"));
                 }
 
                 log(array.get().length() + " markers found in " + mp3File.getFilename());
@@ -93,11 +88,10 @@ public class Main {
                         if (i==0 && !time.equals("0:00.000")) {
                             time = "0:00.000";
                         }
-                        String name = inner.getString("Name")
+                        String name = trim(inner.getString("Name")
                                 .replace(".", "")
-                                .replace("\"", "")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
-                                .replaceAll(" - [cC]ontinued$", "");
+                                .replaceAll(" - [cC]ontinued$", ""));
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
@@ -118,6 +112,7 @@ public class Main {
                 logAndExit(e);
             }
         });
+        processedFiles.add(logFile);
 
         AtomicReference<String> chapteredDirectory = new AtomicReference<String>("");
 
@@ -148,7 +143,7 @@ public class Main {
                     chapter.getMp3File().isVbr() ? "-f" : "",
                     chapteredDirectory.get(),
                     newFileName,
-                    "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + chapter.getChapterNameFormatted() + ",@n=" + (i+1) + "]\"",
+                    "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + cleanForCommandLine(chapter.getChapterNameFormatted()) + ",@n=" + (i+1) + "]\"",
                     cleanFileName(chapter.getMp3File().getFilename()),
                     beginminutes + "." + beginseconds + "." + beginhundredths,
                     endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
@@ -295,6 +290,10 @@ public class Main {
                 .replace("'", "\\'");
     }
 
+    private static String cleanForCommandLine(String chapterName) {
+        return chapterName.replaceAll("\"", "\\\\\"");
+    }
+
     private static void logAndExit(Exception e) {
         log("Exception: " + e.getMessage());
         log(getStackTrace(e));
@@ -308,15 +307,20 @@ public class Main {
         FileWriter fw = null;
 
         try {
-            File file = new File(path + "/output.log");
+            File movedLogFile = new File(path + "/backup/output.log");
+            if (logFile == null) {
+                logFile = new File(path + "/output.log");
+            } else if (movedLogFile.exists()) {
+                logFile = movedLogFile;
+            }
 
             // if file doesnt exists, then create it
-            if (!file.exists()) {
-                file.createNewFile();
+            if (!logFile.exists()) {
+                logFile.createNewFile();
             }
 
             // true = append file
-            fw = new FileWriter(file.getAbsoluteFile(), true);
+            fw = new FileWriter(logFile.getAbsoluteFile(), true);
             bw = new BufferedWriter(fw);
 
             bw.write(message + getProperty("line.separator"));
