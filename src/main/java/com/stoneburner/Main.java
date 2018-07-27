@@ -186,7 +186,9 @@ public class Main {
             }
         });
 
-        getAllFilesInDirectoryWithExtension("jpg", null).parallelStream().forEach(file -> {
+        getAllFilesInDirectoryWithExtension("jpg", null).parallelStream()
+                .filter(file -> !chapters.isEmpty())
+                .forEach(file -> {
             processedFiles.add(file);
             StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
             builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
@@ -208,13 +210,15 @@ public class Main {
                     }
                 }).sum();
 
-        long differenceInTime = abs(lengthOfNewFiles - totalLengthOriginal.get());
-        if (differenceInTime > 10000) {
-            log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
-            log("New files totaled: " + lengthOfNewFiles + " ms.");
-            log("Total length difference was: " + differenceInTime + ". Something went wrong.");
-        } else {
-            swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
+        if (!chapters.isEmpty()) {
+            long differenceInTime = abs(lengthOfNewFiles - totalLengthOriginal.get());
+            if (differenceInTime > 10000) {
+                log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
+                log("New files totaled: " + lengthOfNewFiles + " ms.");
+                log("Total length difference was: " + differenceInTime + ". Something went wrong.");
+            } else {
+                swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
+            }
         }
 
         log("Done");
