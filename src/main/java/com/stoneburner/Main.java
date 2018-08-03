@@ -1,5 +1,6 @@
 package com.stoneburner;
 
+import com.google.common.base.Stopwatch;
 import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
@@ -14,6 +15,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.google.common.base.Stopwatch.createStarted;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.io.Files.move;
 import static java.lang.Math.abs;
@@ -22,6 +24,8 @@ import static java.lang.System.getProperty;
 import static java.net.URLDecoder.decode;
 import static java.nio.file.Files.isRegularFile;
 import static java.nio.file.Paths.get;
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.IntStream.range;
 import static org.apache.commons.io.FileUtils.copyFile;
 import static org.apache.commons.io.FilenameUtils.getExtension;
@@ -87,6 +91,9 @@ public class Main {
                         String time = inner.getString("Time");
                         if (i==0 && !time.equals("0:00.000")) {
                             time = "0:00.000";
+                        }
+                        if (i != array.get().length()-1 && time.equals(((JSONObject)array.get().get(i+1)).getString("Time"))) {
+                            return;
                         }
                         String name = trim(inner.getString("Name")
                                 .replace(".", "")
@@ -265,20 +272,12 @@ public class Main {
 
     private static void swapDirectories(String chapteredDirectory) {
         new File(path + "/backup").mkdir();
-        processedFiles.forEach(f -> {
-            try {
-                move(f, new File(path + "/backup/" + f.getName()));
-            } catch (IOException e) {
-                log("Error moving file! " + e);
-            }
+        processedFiles.forEach(file -> {
+            moveFileWithRetry(file, new File(path + "/backup/" + file.getName()));
         });
 
-        getAllFilesInDirectoryWithExtension("", chapteredDirectory).forEach(f -> {
-            try {
-                move(f, new File(path + "/" + f.getName()));
-            } catch (IOException e) {
-                log("Error moving file! " + e);
-            }
+        getAllFilesInDirectoryWithExtension("", chapteredDirectory).forEach(file -> {
+            moveFileWithRetry(file, new File(path + "/" + file.getName()));
         });
 
         File chapteredDirectoryFile = new File(chapteredDirectory);
@@ -339,6 +338,25 @@ public class Main {
                     fw.close();
             } catch (IOException e) {
                 logAndExit(e);
+            }
+        }
+    }
+
+    private static void moveFileWithRetry(File originalLocation, File newLocation) {
+        Stopwatch stopwatch = createStarted();
+        boolean success = false;
+        while (!success && stopwatch.elapsed(MINUTES) < 30) {
+            try {
+                move(originalLocation, newLocation);
+                success = true;
+                stopwatch.stop();
+            } catch (IOException e) {
+                log("Error moving file! " + e);
+                try {
+                    SECONDS.sleep(10);
+                } catch (InterruptedException e1) {
+                    //no-op
+                }
             }
         }
     }
