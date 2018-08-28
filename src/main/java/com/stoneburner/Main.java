@@ -69,7 +69,7 @@ public class Main {
                 processedFiles.add(file);
 
                 if (isBlank(albumtitle.get())) {
-                    albumtitle.set(mp3File.getId3v2Tag().getAlbum());
+                    albumtitle.set(mp3File.getId3v2Tag().getAlbum().replaceAll(",", ""));
                     author.set(mp3File.getId3v2Tag().getArtist());
                 }
                 List<Chapter> innerList = newArrayList();
@@ -143,15 +143,15 @@ public class Main {
             }
 
             String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + "+-+@t\"");
-            chapteredDirectory.set(cleanFileName(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)"));
+            chapteredDirectory.set(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)");
 
             String command = format(MP3_SPLT_COMMAND,
                     mp3splt,
                     chapter.getMp3File().isVbr() ? "-f" : "",
-                    chapteredDirectory.get(),
+                    wrapInQuotes(chapteredDirectory.get()),
                     newFileName,
-                    "\"[@o,@a=" + author + ",@b=" + albumtitle + ",@t=" + cleanForCommandLine(chapter.getChapterNameFormatted()) + ",@n=" + (i+1) + "]\"",
-                    cleanFileName(chapter.getMp3File().getFilename()),
+                    "\"[@o,@a=" + author.get() + ",@b=" + albumtitle.get() + ",@t=" + cleanForCommandLine(chapter.getChapterNameFormatted()) + ",@n=" + (i+1) + "]\"",
+                    wrapInQuotes(chapter.getMp3File().getFilename()),
                     beginminutes + "." + beginseconds + "." + beginhundredths,
                     endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
 
@@ -286,11 +286,8 @@ public class Main {
         }
     }
 
-    private static String cleanFileName(String string) {
-        return string.replace(" ", "\\ ")
-                .replace("(", "\\(")
-                .replace(")", "\\)")
-                .replace("'", "\\'");
+    private static String wrapInQuotes(String string) {
+        return new StringBuilder("\"").append(string).append("\"").toString();
     }
 
     private static String cleanForCommandLine(String chapterName) {
