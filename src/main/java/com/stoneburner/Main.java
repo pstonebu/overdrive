@@ -68,8 +68,10 @@ public class Main {
 
                 processedFiles.add(file);
 
-                if (isBlank(albumtitle.get())) {
+                if (isBlank(albumtitle.get()) && isNotBlank(mp3File.getId3v2Tag().getAlbum())) {
                     albumtitle.set(mp3File.getId3v2Tag().getAlbum().replaceAll(",", ""));
+                }
+                if (isBlank(author.get()) && isNotBlank(mp3File.getId3v2Tag().getArtist())) {
                     author.set(mp3File.getId3v2Tag().getArtist());
                 }
                 List<Chapter> innerList = newArrayList();
