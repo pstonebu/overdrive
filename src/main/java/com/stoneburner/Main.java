@@ -1,9 +1,8 @@
 package com.stoneburner;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
-import com.mpatric.mp3agic.InvalidDataException;
-import com.mpatric.mp3agic.Mp3File;
-import com.mpatric.mp3agic.UnsupportedTagException;
+import com.mpatric.mp3agic.*;
 import org.apache.commons.lang3.SystemUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -17,8 +16,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Stopwatch.createStarted;
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.io.Files.move;
 import static java.lang.Math.abs;
+import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.lang.System.getProperty;
 import static java.net.URLDecoder.decode;
@@ -26,6 +27,7 @@ import static java.nio.file.Files.isRegularFile;
 import static java.nio.file.Paths.get;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static org.apache.commons.io.FileUtils.copyFile;
 import static org.apache.commons.io.FilenameUtils.getExtension;
@@ -56,6 +58,8 @@ public class Main {
         }
 
         AtomicLong totalLengthOriginal = new AtomicLong(0);
+
+        HashMap<String,List<Chapter>> tracksToCombine = newHashMap();
 
         getAllFilesInDirectoryWithExtension("mp3", null).stream().forEach(file -> {
             try {
@@ -104,10 +108,15 @@ public class Main {
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
-                        if (!name.equals(lastChapterName) || !chapters.get(chapters.size() - 1).getFile().equals(file)) {
+                        if (!name.equals(lastChapterName) || !chapters.get(chapters.size()-1).getFile().equals(file)) {
                             Chapter newChapter = new Chapter(mp3File, file, name, time);
                             if (name.equals(lastChapterName)) {
                                 newChapter.setChapterNameFormatted(name + " continued");
+                                if (tracksToCombine.get(name) == null) {
+                                    tracksToCombine.put(name, newArrayList(chapters.get(chapters.size()-1), newChapter));
+                                } else {
+                                    tracksToCombine.get(name).add(newChapter);
+                                }
                             }
                             innerList.add(newChapter);
                             chapters.add(newChapter);
@@ -145,6 +154,7 @@ public class Main {
             }
 
             String newFileName = "\"" + (leftPad(String.valueOf(i+1), 2, '0') + "+-+@t\"");
+            chapter.setFileName(cleanForCommandLine(leftPad(String.valueOf(i+1), 2, '0') + " - " + chapter.getChapterNameFormatted()));
             chapteredDirectory.set(chapter.getFile().getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)");
 
             String command = format(MP3_SPLT_COMMAND,
@@ -157,42 +167,8 @@ public class Main {
                     beginminutes + "." + beginseconds + "." + beginhundredths,
                     endminutes == -1 ? "EOF" : (endminutes + "." + endseconds + "." + endhundredths));
 
-            log("executing '" + command + "'");
+            executeCommand(command, isMac);
 
-            StringBuffer output = new StringBuffer();
-
-            Process p;
-            try {
-                if (isMac) {
-                    p = Runtime.getRuntime().exec(new String[] { "bash", "-c", command});
-                } else {
-                    p = Runtime.getRuntime().exec(new String[] { "CMD", "/C", command});
-                }
-
-                p.waitFor();
-
-                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-
-                String line = "";
-                while ((line = reader.readLine())!= null) {
-                    output.append(line + "\n");
-                }
-
-                log(output.toString());
-
-                BufferedReader ereader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
-
-                line = "";
-                output = new StringBuffer();
-                while ((line = ereader.readLine())!= null) {
-                    output.append(line + "\n");
-                }
-
-                log(output.toString());
-
-            } catch (Exception e) {
-                logAndExit(e);
-            }
         });
 
         getAllFilesInDirectoryWithExtension("jpg", null).parallelStream()
@@ -229,6 +205,15 @@ public class Main {
                 swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
             }
         }
+
+        log("Combining split tracks");
+
+        tracksToCombine.forEach((key, value) -> {
+            List<String> fileNames = value.stream()
+                    .map(c -> (c.getFile().getParent() + "/" + c.getFileName() + ".mp3").replaceAll(" ", "\\\\ "))
+                    .collect(toList());
+            combine(fileNames, isMac);
+        });
 
         log("Done");
     }
@@ -267,8 +252,7 @@ public class Main {
                 log("found " + file.getName());
             }
         });
-
-
+        
         return files;
     }
 
@@ -357,6 +341,82 @@ public class Main {
                     //no-op
                 }
             }
+        }
+    }
+
+    public static void combine(List<String> fileNames, boolean isMac) {
+        try {
+            executeCommand("/usr/local/bin/mp3wrap " + fileNames.get(0) + " " + Joiner.on(" ").join(fileNames), isMac);
+
+            //make a new directory for combined files
+            File file = new File(fileNames.get(0));
+            Mp3File mp3File = new Mp3File(fileNames.get(0).replaceAll("\\\\", ""));
+            String processedDirectory = file.getParent() + "/overdrive_processed";
+            executeCommand("mkdir " + processedDirectory, isMac);
+
+            //move combined files into directory
+            fileNames.forEach(s -> {
+                executeCommand("mv " + s + " " + processedDirectory, isMac);
+            });
+
+            //grab mp3 metadata from new file
+            ID3v2 v2 = mp3File.getId3v2Tag();
+            ID3v1 v1 = mp3File.getId3v1Tag();
+
+            String commandLineFileName = fileNames.get(0).replaceAll(".mp3$", "_MP3WRAP.mp3");
+            String prettyFileName = commandLineFileName.replaceAll("\\\\", "");
+
+            //repair new file
+            executeCommand("/usr/local/bin/mp3val -f -nb " + commandLineFileName, isMac);
+
+            //copy metadata to repaired new file
+            mp3File = new Mp3File(prettyFileName);
+            mp3File.setId3v2Tag(v2);
+            mp3File.setId3v1Tag(v1);
+            mp3File.save(prettyFileName.replaceAll(".mp3$", "2.mp3"));
+            executeCommand("rm -rf " + commandLineFileName, isMac);
+            executeCommand("mv " + commandLineFileName.replaceAll(".mp3$", "2.mp3" + " \"" + fileNames.get(0) + "\""), isMac);
+        } catch (Exception e) {
+            log(e.getMessage());
+        }
+    }
+
+    private static void executeCommand(String command, boolean isMac) {
+        log("executing '" + command + "'");
+
+        StringBuffer output = new StringBuffer();
+
+        Process p;
+        try {
+            if (isMac) {
+                p = Runtime.getRuntime().exec(new String[] { "sh", "-c", command});
+            } else {
+                p = Runtime.getRuntime().exec(new String[] { "CMD", "/C", command});
+            }
+
+            p.waitFor();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+
+            String line = "";
+            while ((line = reader.readLine())!= null) {
+                output.append(line + "\n");
+            }
+
+            log(output.toString());
+
+            BufferedReader ereader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+
+            line = "";
+            output = new StringBuffer();
+            while ((line = ereader.readLine())!= null) {
+                output.append(line + "\n");
+            }
+
+            log(output.toString());
+
+        } catch (Exception e) {
+            logAndExit(e);
         }
     }
 }

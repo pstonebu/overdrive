@@ -16,6 +16,7 @@ public class Chapter {
     private String chapterNameFormatted;
     private int secondsMark;
     private int hundredths;
+    private String fileName;
 
     public Chapter(Mp3File mp3File, File file, String chapterName, String timeString) {
         this.mp3File = mp3File;
