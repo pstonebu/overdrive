@@ -104,7 +104,7 @@ public class Main {
                         String name = trim(inner.getString("Name")
                                 .replace(".", "")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
-                                .replaceAll(" - [cC]ontinued$", ""));
+                                .replaceAll("( -)? [cC]ontinued$", ""));
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
