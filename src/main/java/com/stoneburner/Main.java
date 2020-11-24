@@ -108,6 +108,7 @@ public class Main {
                         }
                         String name = trim(inner.getString("Name")
                                 .replace(".", "")
+                                .replaceAll(" {2,}", " ")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
                                 .replaceAll("( -)? [cC]ontinued$", "")
                                 .replaceAll(",", "COMMA"));
