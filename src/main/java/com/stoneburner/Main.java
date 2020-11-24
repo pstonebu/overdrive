@@ -11,6 +11,7 @@ import org.json.JSONObject;
 import java.io.*;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -46,6 +47,7 @@ public class Main {
     public static void main(String[] args) {
 
         List<Chapter> chapters = newArrayList();
+        AtomicBoolean commas = new AtomicBoolean(false);
 
         AtomicReference<String> albumtitle = new AtomicReference<>("");
         AtomicReference<String> author = new AtomicReference<>("");
@@ -101,10 +103,14 @@ public class Main {
                         if (i != array.get().length()-1 && time.equals(((JSONObject)array.get().get(i+1)).getString("Time"))) {
                             return;
                         }
+                        if (inner.getString("Name").contains(",")) {
+                            commas.set(true);
+                        }
                         String name = trim(inner.getString("Name")
                                 .replace(".", "")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
-                                .replaceAll("( -)? [cC]ontinued$", ""));
+                                .replaceAll("( -)? [cC]ontinued$", "")
+                                .replaceAll(",", "COMMA"));
 
                         String lastChapterName = chapters.isEmpty() ? "" : chapters.get(chapters.size() - 1).getChapterName();
 
@@ -214,6 +220,22 @@ public class Main {
                     .collect(toList());
             combine(fileNames, isMac);
         });
+
+        if (commas.get()) {
+            log("Fixing commas.");
+            getAllFilesInDirectoryWithExtension("mp3", null).stream()
+                    .filter(file -> file.getName().contains("COMMA"))
+                    .forEach(file -> {
+                        try {
+                            Mp3File mp3File = new Mp3File(file);
+                            mp3File.getId3v2Tag().setTitle(mp3File.getId3v2Tag().getTitle().replace("COMMA", ","));
+                            mp3File.save(file.getAbsolutePath().replaceAll("COMMA", ","));
+                            file.delete();
+                        } catch (Exception e) {
+                            log("Error");
+                        }
+                    });
+        }
 
         log("Done");
     }
