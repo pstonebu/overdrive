@@ -203,11 +203,13 @@ public class Main {
                 }).sum();
 
         if (!chapters.isEmpty()) {
-            long differenceInTime = abs(lengthOfNewFiles - totalLengthOriginal.get());
-            if (differenceInTime > 10000) {
+            double differenceInTime = (lengthOfNewFiles * 1.0) / totalLengthOriginal.get();
+            long secondsDifference = abs(lengthOfNewFiles - totalLengthOriginal.get());
+            if (differenceInTime >= .999 && differenceInTime <= 1.001) {
                 log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
                 log("New files totaled: " + lengthOfNewFiles + " ms.");
-                log("Total length difference was: " + differenceInTime + ". Something went wrong.");
+                log("Total length difference was: " + secondsDifference + ". Something went wrong.");
+                logAndExit(new Exception("File lengths weren't close enough"));
             } else {
                 swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
             }
