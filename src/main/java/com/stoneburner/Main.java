@@ -208,7 +208,7 @@ public class Main {
             if (differenceInTime >= .999 && differenceInTime <= 1.001) {
                 log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
                 log("New files totaled: " + lengthOfNewFiles + " ms.");
-                log("Total length difference was: " + secondsDifference + ". Something went wrong.");
+                log("Total length difference was: " + secondsDifference + ", and percent diff was " + differenceInTime + ". Something went wrong.");
                 logAndExit(new Exception("File lengths weren't close enough"));
             } else {
                 swapDirectories(chapteredDirectory.get().replaceAll("\\\\", ""));
