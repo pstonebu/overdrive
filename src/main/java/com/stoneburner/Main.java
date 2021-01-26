@@ -205,7 +205,7 @@ public class Main {
         if (!chapters.isEmpty()) {
             double differenceInTime = (lengthOfNewFiles * 1.0) / totalLengthOriginal.get();
             long secondsDifference = abs(lengthOfNewFiles - totalLengthOriginal.get());
-            if (differenceInTime >= .999 && differenceInTime <= 1.001) {
+            if (differenceInTime < .9999 || differenceInTime > 1.0001) {
                 log("Original files totaled: " + totalLengthOriginal.get() + " ms.");
                 log("New files totaled: " + lengthOfNewFiles + " ms.");
                 log("Total length difference was: " + secondsDifference + ", and percent diff was " + differenceInTime + ". Something went wrong.");
