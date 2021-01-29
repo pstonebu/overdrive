@@ -219,7 +219,7 @@ public class Main {
 
         tracksToCombine.forEach((key, value) -> {
             List<String> fileNames = value.stream()
-                    .map(c -> (c.getFile().getParent() + "/" + c.getFileName() + ".mp3").replaceAll(" ", "\\\\ ").replaceAll(":", "_"))
+                    .map(c -> (c.getFile().getParent() + "/" + c.getFileName() + ".mp3").replaceAll(" ", "\\\\ ").replaceAll(":", "_").replaceAll("\'", "\\\\'"))
                     .collect(toList());
             combine(fileNames, isMac);
         });
