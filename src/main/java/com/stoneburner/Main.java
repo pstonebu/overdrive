@@ -375,7 +375,7 @@ public class Main {
 
             //make a new directory for combined files
             File file = new File(fileNames.get(0));
-            Mp3File mp3File = new Mp3File(fileNames.get(0).replaceAll("\\\\", "").replaceAll(":", "_"));
+            Mp3File mp3File = new Mp3File(fileNames.get(0).replaceAll("\\\\", "").replaceAll("(:|\\?)", "_"));
             String processedDirectory = file.getParent() + "/overdrive_processed";
             executeCommand("mkdir " + processedDirectory, isMac);
 
@@ -389,7 +389,7 @@ public class Main {
             ID3v1 v1 = mp3File.getId3v1Tag();
 
             String commandLineFileName = fileNames.get(0).replaceAll(".mp3$", "_MP3WRAP.mp3");
-            String prettyFileName = commandLineFileName.replaceAll("\\\\", "").replaceAll(":", "_");
+            String prettyFileName = commandLineFileName.replaceAll("\\\\", "").replaceAll("(:|\\?)", "_");
 
             //repair new file
             executeCommand("/usr/local/bin/mp3val -f -nb " + commandLineFileName, isMac);
