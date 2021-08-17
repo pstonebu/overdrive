@@ -103,7 +103,7 @@ public class Main {
                         if (i != array.get().length()-1 && time.equals(((JSONObject)array.get().get(i+1)).getString("Time"))) {
                             return;
                         }
-                        if (inner.getString("Name").contains(",")) {
+                        if (inner.get("Name").toString().contains(",")) {
                             commas.set(true);
                         }
                         String name = trim(inner.getString("Name")
