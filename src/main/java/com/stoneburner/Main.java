@@ -9,6 +9,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,9 +21,8 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.io.Files.move;
 import static java.lang.Math.abs;
-import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
-import static java.lang.System.getProperty;
+import static java.lang.System.lineSeparator;
 import static java.net.URLDecoder.decode;
 import static java.nio.file.Files.isRegularFile;
 import static java.nio.file.Paths.get;
@@ -41,7 +41,7 @@ public class Main {
     //mp3splt[.exe] -d overdrivesplit -o newfilename input start_time end_time
     private static final String MP3_SPLT_COMMAND = "%s %s -d %s -o %s -g %s %s %s %s";
     private static String path = "";
-    private static Deque<File> processedFiles = new ArrayDeque<>();
+    private static final Deque<File> processedFiles = new ArrayDeque<>();
     private static File logFile = null;
 
     public static void main(String[] args) {
@@ -63,7 +63,7 @@ public class Main {
 
         HashMap<String,List<Chapter>> tracksToCombine = newHashMap();
 
-        getAllFilesInDirectoryWithExtension("mp3", null).stream().forEach(file -> {
+        getAllFilesInDirectoryWithExtension("mp3", null).forEach(file -> {
             try {
                 Mp3File mp3File = new Mp3File(file.getPath());
                 totalLengthOriginal.addAndGet(mp3File.getLengthInMilliseconds());
@@ -80,9 +80,8 @@ public class Main {
                 if (isBlank(author.get()) && isNotBlank(mp3File.getId3v2Tag().getArtist())) {
                     author.set(mp3File.getId3v2Tag().getArtist());
                 }
-                List<Chapter> innerList = newArrayList();
 
-                String markers = decode(mp3File.getId3v2Tag().getOverDriveMarkers(), "UTF-8");
+                String markers = decode(mp3File.getId3v2Tag().getOverDriveMarkers(), StandardCharsets.UTF_8);
                 log("markers = " + markers);
                 JSONObject markerObj = toJSONObject(markers);
                 AtomicReference<JSONArray> array = new AtomicReference<>();
@@ -106,7 +105,7 @@ public class Main {
                         if (inner.get("Name").toString().contains(",")) {
                             commas.set(true);
                         }
-                        String name = trim(inner.getString("Name")
+                        String name = trim(inner.get("Name").toString()
                                 .replace(".", "")
                                 .replaceAll(" {2,}", " ")
                                 .replaceAll(" \\(([0-9]{2}:)?[0-9]{2}:[0-9]{2}\\)$", "")
@@ -125,7 +124,6 @@ public class Main {
                                     tracksToCombine.get(name).add(newChapter);
                                 }
                             }
-                            innerList.add(newChapter);
                             chapters.add(newChapter);
                         }
                     } catch (JSONException ex) {
@@ -139,7 +137,7 @@ public class Main {
         });
         processedFiles.add(logFile);
 
-        AtomicReference<String> chapteredDirectory = new AtomicReference<String>("");
+        AtomicReference<String> chapteredDirectory = new AtomicReference<>("");
 
         range(0, chapters.size()).forEach(i -> {
             Chapter chapter = chapters.get(i);
@@ -147,7 +145,7 @@ public class Main {
             int beginminutes = chapter.getSecondsMark() / 60;
             int beginseconds = chapter.getSecondsMark() % 60;
             int beginhundredths = chapter.getHundredths();
-            int endminutes = 0;
+            int endminutes;
             int endseconds = 0;
             int endhundredths = 0;
 
@@ -182,9 +180,7 @@ public class Main {
                 .filter(file -> !chapters.isEmpty())
                 .forEach(file -> {
             processedFiles.add(file);
-            StringBuilder builder = new StringBuilder(file.getParentFile().getAbsolutePath());
-            builder.append("/").append(albumtitle.get()).append(" (Chaptered)/").append(file.getName());
-            File destination = new File(builder.toString());
+            File destination = new File(file.getParentFile().getAbsolutePath() + "/" + albumtitle.get() + " (Chaptered)/" + file.getName());
             try {
                 copyFile(file, destination);
             } catch (IOException e) {
@@ -219,7 +215,7 @@ public class Main {
 
         tracksToCombine.forEach((key, value) -> {
             List<String> fileNames = value.stream()
-                    .map(c -> (c.getFile().getParent() + "/" + c.getFileName() + ".mp3").replaceAll(" ", "\\\\ ").replaceAll(":", "_").replaceAll("\'", "\\\\'"))
+                    .map(c -> (c.getFile().getParent() + "/" + c.getFileName() + ".mp3").replaceAll(" ", "\\\\ ").replaceAll(":", "_").replaceAll("'", "\\\\'").replaceAll("\\)", "\\\\)").replaceAll("\\(", "\\\\("))
                     .collect(toList());
             combine(fileNames, isMac);
         });
@@ -244,18 +240,9 @@ public class Main {
     }
 
     private static Set<File> getAllFilesInDirectoryWithExtension(String extension, String optionalPath) {
-        Set<File> files = new TreeSet<File>(new Comparator<File>() {
-            public int compare(File one, File other) {
-                return one.getName().compareToIgnoreCase(other.getName());
-            }
-        });
+        Set<File> files = new TreeSet<>((one, other) -> one.getName().compareToIgnoreCase(other.getName()));
 
-        String decodedPath = "";
-        try {
-            decodedPath = decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            logAndExit(e);
-        }
+        String decodedPath = decode(Main.class.getProtectionDomain().getCodeSource().getLocation().getPath(), StandardCharsets.UTF_8);
 
         if (isNotEmpty(optionalPath)) {
             decodedPath = optionalPath.replaceAll("\\\\", "");
@@ -270,7 +257,7 @@ public class Main {
             path = decodedPath;
         }
 
-        Arrays.stream(new File(decodedPath).listFiles()).forEach(file -> {
+        Arrays.stream(Objects.requireNonNull(new File(decodedPath).listFiles())).forEach(file -> {
             Path path = get(file.getAbsolutePath());
             if (isRegularFile(path) && (isBlank(extension) || getExtension(file.getName()).equals(extension))) {
                 files.add(file);
@@ -283,22 +270,18 @@ public class Main {
 
     private static void swapDirectories(String chapteredDirectory) {
         new File(path + "/backup").mkdir();
-        processedFiles.forEach(file -> {
-            moveFileWithRetry(file, new File(path + "/backup/" + file.getName()));
-        });
+        processedFiles.forEach(file -> moveFileWithRetry(file, new File(path + "/backup/" + file.getName())));
 
-        getAllFilesInDirectoryWithExtension("", chapteredDirectory).forEach(file -> {
-            moveFileWithRetry(file, new File(path + "/" + file.getName()));
-        });
+        getAllFilesInDirectoryWithExtension("", chapteredDirectory).forEach(file -> moveFileWithRetry(file, new File(path + "/" + file.getName())));
 
         File chapteredDirectoryFile = new File(chapteredDirectory);
-        if (chapteredDirectoryFile.exists() && chapteredDirectoryFile.isDirectory() && chapteredDirectoryFile.list().length == 0) {
+        if (chapteredDirectoryFile.exists() && chapteredDirectoryFile.isDirectory() && Objects.requireNonNull(chapteredDirectoryFile.list()).length == 0) {
             chapteredDirectoryFile.delete();
         }
     }
 
     private static String wrapInQuotes(String string) {
-        return new StringBuilder("\"").append(string).append("\"").toString();
+        return "\"" + string + "\"";
     }
 
     private static String cleanForCommandLine(String chapterName) {
@@ -325,7 +308,7 @@ public class Main {
                 logFile = movedLogFile;
             }
 
-            // if file doesnt exists, then create it
+            // if file doesn't exist, then create it
             if (!logFile.exists()) {
                 logFile.createNewFile();
             }
@@ -334,7 +317,7 @@ public class Main {
             fw = new FileWriter(logFile.getAbsoluteFile(), true);
             bw = new BufferedWriter(fw);
 
-            bw.write(message + getProperty("line.separator"));
+            bw.write(message + lineSeparator());
 
         } catch (IOException e) {
             logAndExit(e);
@@ -380,9 +363,7 @@ public class Main {
             executeCommand("mkdir " + processedDirectory, isMac);
 
             //move combined files into directory
-            fileNames.forEach(s -> {
-                executeCommand("mv " + s + " " + processedDirectory, isMac);
-            });
+            fileNames.forEach(s -> executeCommand("mv " + s + " " + processedDirectory, isMac));
 
             //grab mp3 metadata from new file
             ID3v2 v2 = mp3File.getId3v2Tag();
@@ -409,7 +390,7 @@ public class Main {
     private static void executeCommand(String command, boolean isMac) {
         log("executing '" + command + "'");
 
-        StringBuffer output = new StringBuffer();
+        StringBuilder output = new StringBuilder();
 
         Process p;
         try {
@@ -423,19 +404,18 @@ public class Main {
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
-            String line = "";
-            while ((line = reader.readLine())!= null) {
-                output.append(line + "\n");
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
             }
 
             log(output.toString());
 
             BufferedReader ereader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
-            line = "";
-            output = new StringBuffer();
-            while ((line = ereader.readLine())!= null) {
-                output.append(line + "\n");
+            output = new StringBuilder();
+            while ((line = ereader.readLine()) != null) {
+                output.append(line).append("\n");
             }
 
             log(output.toString());
